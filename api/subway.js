@@ -18,11 +18,9 @@ export default async function handler(req, res) {
   try {
     let url;
     if (type === "arrival" && station) {
-      // 실시간 열차 도착 정보
-      url = `http://swopenapi.seoul.go.kr/api/subway/${API_KEY}/json/realtimeStationArrival/0/10/${encodeURIComponent(station)}`;
+      url = `https://swopenapi.seoul.go.kr/api/subway/${API_KEY}/json/realtimeStationArrival/0/10/${encodeURIComponent(station)}`;
     } else if (type === "congestion" && trainNo) {
-      // 실시간 칸별 혼잡도
-      url = `http://swopenapi.seoul.go.kr/api/subway/${API_KEY}/json/realtimeCarInfo/0/1/${trainNo}`;
+      url = `https://swopenapi.seoul.go.kr/api/subway/${API_KEY}/json/realtimeCarInfo/0/1/${trainNo}`;
     } else {
       return res.status(400).json({ error: "잘못된 요청이에요" });
     }
