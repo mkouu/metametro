@@ -1,7 +1,16 @@
 const API_KEY = "4f626a4844696b6137354d5165487a";
 
+const ALLOWED_ORIGINS = [
+  "https://subway-seat.apps.tossmini.com",
+  "https://subway-seat.private-apps.tossmini.com",
+  "https://metametro.vercel.app",
+  "http://localhost:3000",
+];
+
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  const origin = req.headers.origin || "";
+  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(200).end();
