@@ -264,18 +264,20 @@ function calcProb(st,nst,d,h,m,car=5,zone=2,lineNum=2){
   const C=getCong(st,d,h,m,lineNum);
   const Cn=nst?getCong(nst,d,h,m,lineNum):C;
 
-  // 1. 현재역 좌석 점유율 (혼잡도 70% = 좌석 만석 기준)
-  const seatOccupancy=Math.min(1, C/70);
+  // 1. 좌석 점유율 (혼잡도 60% = 좌석 만석 기준)
+  const seatOccupancy=Math.min(1, C/60);
   const emptySeatRate=Math.max(0, 1-seatOccupancy);
 
   // 2. 하차로 생기는 빈자리
-  const alightRate=Math.max(0, C-Cn)/100;
-  // 환승역 등 많이 내릴수록 최소 하차율 보장
-  const minAlight=C<=40?0.35:C<=70?0.15:0.08;
-  const effectiveAlight=Math.max(alightRate, minAlight*(C/100));
+  // 환승역 도착 시 대거 하차 → 보너스 적용
+  const isNextTransfer=nst&&TRANSFER.has(nst);
+  const rawAlightRate=Math.max(0, C-Cn)/100;
+  const transferBonus=isNextTransfer?0.15:0;
+  const minAlight=C<=30?0.20:C<=60?0.10:0.05;
+  const effectiveAlight=Math.max(rawAlightRate+transferBonus, minAlight*(C/100));
 
   // 3. 최종 확률
-  let P=emptySeatRate + effectiveAlight*(1-emptySeatRate);
+  let P=emptySeatRate*0.8 + Math.min(0.7,effectiveAlight)*(1-emptySeatRate*0.8);
 
   // 4. 칸/구역 보정
   const{bonus,penalty}=calcZoneBonus(st,car,zone);
@@ -310,15 +312,17 @@ const gcb=c=>c<=40?"#E8F5E9":c<=65?"#FFF8E1":"#FFEBEE";
 
 // ── 서울 열린데이터 API (Vercel 프록시 경유) ─────────────
 const PROXY_URL="https://metametro.vercel.app/api/subway";
+const SUBWAY_ID={1:"1001",2:"1002",3:"1003",4:"1004",5:"1005",6:"1006",7:"1007",8:"1008"};
 
-async function fetchArrival(station){
+async function fetchArrival(station, lineNum=2){
   try{
     const res=await fetch(`${PROXY_URL}?type=arrival&station=${encodeURIComponent(station)}`);
     if(!res.ok) throw new Error("API 오류");
     const data=await res.json();
     if(!data.realtimeArrivalList) return [];
+    const subwayId=SUBWAY_ID[lineNum]||"1002";
     return data.realtimeArrivalList
-      .filter(t=>t.subwayId==="1002")
+      .filter(t=>t.subwayId===subwayId)
       .map(t=>({
         trainNo:t.btrainNo||t.trainNo||null,
         msg:t.arvlMsg2,
@@ -512,7 +516,7 @@ export default function App(){
   const loadArrivals=async(st,cancelled,setDone)=>{
     if(!st) return;
     setApiLoading(true);
-    const data=await fetchArrival(st);
+    const data=await fetchArrival(st,selectedLine);
     if(cancelled?.value) return;
     setArrivals(data);
     // 첫 번째 열차 자동 선택 + 혼잡도
@@ -527,15 +531,16 @@ export default function App(){
     if(setDone) setDone(true);
   };
 
-  // dir에 맞는 2호선 열차만 필터링
+  // dir에 맞는 열차만 필터링 (노선별)
   const filteredArrivals=(arrivals||[]).filter(a=>{
     if(!a.dir) return true;
-    const isInner=dir==="I";
-    // 2호선 API updnLine: "내선", "외선"
-    if(a.dir==="내선") return isInner;
-    if(a.dir==="외선") return !isInner;
-    // "상행"/"하행" 등 다른 값은 trainLineNm으로 추가 구분
-    // 일단 모두 표시 (2호선 필터는 fetchArrival에서 이미 처리)
+    const isI=dir==="I";
+    // 2호선: 내선/외선
+    if(a.dir==="내선") return isI;
+    if(a.dir==="외선") return !isI;
+    // 3호선 이상 직선: 상행/하행
+    if(a.dir==="상행") return isI;
+    if(a.dir==="하행") return !isI;
     return true;
   });
 
