@@ -269,15 +269,20 @@ function calcProb(st,nst,d,h,m,car=5,zone=2,lineNum=2){
   const emptySeatRate=Math.max(0, 1-seatOccupancy);
 
   // 2. 하차로 생기는 빈자리
-  // 환승역 도착 시 대거 하차 → 보너스 적용
+  // - 현재역이 환승역: 이미 많이 내린 상태 → 현재 빈자리 보너스
+  const isCurTransfer=TRANSFER.has(st);
+  // - 다음역이 환승역: 거기서 많이 내릴 예정 → 하차 보너스
   const isNextTransfer=nst&&TRANSFER.has(nst);
+
   const rawAlightRate=Math.max(0, C-Cn)/100;
   const transferBonus=isNextTransfer?0.15:0;
+  const curTransferBonus=isCurTransfer?0.08:0; // 현재역 환승 보너스
   const minAlight=C<=30?0.20:C<=60?0.10:0.05;
   const effectiveAlight=Math.max(rawAlightRate+transferBonus, minAlight*(C/100));
 
   // 3. 최종 확률
   let P=emptySeatRate*0.8 + Math.min(0.7,effectiveAlight)*(1-emptySeatRate*0.8);
+  P=Math.min(0.95, P+curTransferBonus);
 
   // 4. 칸/구역 보정
   const{bonus,penalty}=calcZoneBonus(st,car,zone);
@@ -531,16 +536,20 @@ export default function App(){
     if(setDone) setDone(true);
   };
 
-  // dir에 맞는 열차만 필터링 (노선별)
+  // dir에 맞는 열차만 필터링 (노선별 상행/하행 매핑)
   const filteredArrivals=(arrivals||[]).filter(a=>{
     if(!a.dir) return true;
     const isI=dir==="I";
-    // 2호선: 내선/외선
-    if(a.dir==="내선") return isI;
-    if(a.dir==="외선") return !isI;
-    // 3호선 이상 직선: 상행/하행
-    if(a.dir==="상행") return isI;
-    if(a.dir==="하행") return !isI;
+    if(selectedLine===2){
+      // 2호선: 내선/외선
+      if(a.dir==="내선") return isI;
+      if(a.dir==="외선") return !isI;
+    } else {
+      // 직선 노선: API 상행=오금→대화(O), 하행=대화→오금(I)
+      // 즉 우리 I(배열 순방향)=API 하행, O=API 상행
+      if(a.dir==="하행") return isI;
+      if(a.dir==="상행") return !isI;
+    }
     return true;
   });
 
@@ -598,8 +607,13 @@ export default function App(){
           // dir에 맞는 열차만 필터링
           const dirFiltered=data.filter(a=>{
             if(!a.dir) return true;
-            if(a.dir==="내선") return dir==="I";
-            if(a.dir==="외선") return dir==="O";
+            if(selectedLine===2){
+              if(a.dir==="내선") return dir==="I";
+              if(a.dir==="외선") return dir==="O";
+            } else {
+              if(a.dir==="하행") return dir==="I";
+              if(a.dir==="상행") return dir==="O";
+            }
             return true;
           });
           const firstTrain=dirFiltered.length>0?dirFiltered[0]:data[0];
