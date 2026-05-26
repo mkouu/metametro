@@ -890,7 +890,7 @@ export default function App(){
                 ?`${tSt}역 도착`
                 :trainPos.code==="2"
                   ?`${tSt}역 출발 → ${tNxt}역`
-                  :`${trainPos.msg3||tSt} → ${tNxt} 운행중`
+                  :`${tSt} → ${tNxt} 운행중`
               :tStat==="stopped"?`${tSt}역 정차 중`:`${tSt} → ${tNxt} 운행 중`
             }
           </div>
@@ -1291,7 +1291,6 @@ export default function App(){
                   {a.lineNm&&<span style={{marginLeft:4,color:"#B0B8C1"}}>{a.lineNm.split("-")[0].trim()}</span>}
                 </div>
               </div>
-              <div style={{fontSize:10,color:i===0?"#1A6DFF":"#FF8F00",fontWeight:600}}>{a.msg3}</div>
               {isSel&&<div style={{fontSize:10,color:"#1A6DFF",fontWeight:700,background:"#EEF4FF",padding:"2px 7px",borderRadius:8}}>선택됨 ✓</div>}
             </button>;
           })}
