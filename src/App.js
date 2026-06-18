@@ -171,15 +171,14 @@ function calcDir(from, to, lineNum=2){
   return ti>fi?"I":"O";
 }
 
-function getNextSt(cur, d, lineNum=2){
-  const LINE=getLineArr(lineNum);
-  const LN=getLineN(lineNum);
+function getNextSt(cur, d, lineNum=2, branch=false){
+  const LINE=getLineArr(lineNum, branch);
+  const LN=getLineN(lineNum, branch);
   const i=LINE.indexOf(cur);
   if(i===-1) return null;
   if(lineNum===2){
     return LINE[d==="I"?(i+1)%LN:(i-1+LN)%LN];
   }
-  // 직선 노선: 끝에서 null
   if(d==="I") return i<LN-1?LINE[i+1]:null;
   return i>0?LINE[i-1]:null;
 }
@@ -813,21 +812,28 @@ const QUICK_EXIT_DATA:{[key:string]:{line:number,I:number[],O:number[]}}={
 
 function toSlot(h,m){return`${String(h).padStart(2,"0")}:${m<30?"00":"30"}`;}
 
-function getCong(st,d,h,m,lineNum=2){
+function getCong(st,d,h,m,lineNum=2,branch=false){
   const slot=toSlot(h,m);
   const ctMap={1:CT1, 2:CT, 3:CT3, 4:CT4, 5:CT5, 6:CT6, 7:CT7, 8:CT8, 9:CT9};
   const t=(ctMap[lineNum]||CT)[st];
+  let val=0;
   if(t){
     const dv=t[d]||t["I"]||t["O"];
     if(dv){
-      if(dv[slot]!==undefined) return dv[slot];
-      const keys=Object.keys(dv).sort(),sn=h*60+(m<30?0:30);
-      let cl=keys[0],md=9999;
-      for(const k of keys){const[kh,km]=k.split(":").map(Number),df=Math.abs(kh*60+km-sn);if(df<md){md=df;cl=k;}}
-      return dv[cl];
+      if(dv[slot]!==undefined) val=dv[slot];
+      else{
+        const keys=Object.keys(dv).sort(),sn=h*60+(m<30?0:30);
+        let cl=keys[0],md=9999;
+        for(const k of keys){const[kh,km]=k.split(":").map(Number),df=Math.abs(kh*60+km-sn);if(df<md){md=df;cl=k;}}
+        val=dv[cl];
+      }
     }
+  } else {
+    val=CT["_d"][slot]??CT["_d"]["07:30"]??45;
   }
-  return CT["_d"][slot]??CT["_d"]["07:30"]??45;
+  // 9호선 급행: 정차역이 절반이라 승객 집중 → 혼잡도 약 1.5배 보정
+  if(lineNum===9&&branch&&EXPRESS9.has(st)) val=val*1.5;
+  return val;
 }
 
 // ── 칸/구역별 확률 계산 (zone 보정 포함) ─────────────────
@@ -867,9 +873,9 @@ function calcZoneBonus(st,car,zone,nst?,d?){
   return{bonus:Math.min(bonus+quickBonus,0.20),penalty:carPenalty+quickPenalty};
 }
 
-function calcProb(st,nst,d,h,m,car=5,zone=2,lineNum=2){
-  const C=getCong(st,d,h,m,lineNum);
-  const Cn=nst?getCong(nst,d,h,m,lineNum):C;
+function calcProb(st,nst,d,h,m,car=5,zone=2,lineNum=2,branch=false){
+  const C=getCong(st,d,h,m,lineNum,branch);
+  const Cn=nst?getCong(nst,d,h,m,lineNum,branch):C;
 
   // 1. 좌석 점유율 (혼잡도 60% = 좌석 만석 기준)
   const seatOccupancy=Math.min(1, C/60);
@@ -899,12 +905,12 @@ function calcProb(st,nst,d,h,m,car=5,zone=2,lineNum=2){
   return Math.round(P*100);
 }
 
-function bestZone(st,nst,d,h,m,lineNum=2){
+function bestZone(st,nst,d,h,m,lineNum=2,branch=false){
   let b={car:1,zone:1,prob:0},bn={car:1,zone:1,prob:0};
   for(let c=1;c<=10;c++)for(let z=1;z<=3;z++){
-    const p=calcProb(st,nst,d,h,m,c,z,lineNum);
+    const p=calcProb(st,nst,d,h,m,c,z,lineNum,branch);
     if(p>b.prob)b={car:c,zone:z,prob:p};
-    if(nst){const np=calcProb(nst,getNextSt(nst,d,lineNum),d,h,m,c,z,lineNum);if(np>bn.prob)bn={car:c,zone:z,prob:np};}
+    if(nst){const np=calcProb(nst,getNextSt(nst,d,lineNum,branch),d,h,m,c,z,lineNum,branch);if(np>bn.prob)bn={car:c,zone:z,prob:np};}
   }
   return{cur:b,next:nst?bn:null};
 }
@@ -995,15 +1001,15 @@ function mkUser(si,d,lineNum=2){
   const avts=[...FREE_AVTS,...SHOP_AVATARS.map(s=>s.emoji)];
   return{id:Math.floor(Math.random()*999999),avatar:avts[Math.floor(Math.random()*avts.length)],name:`유저${Math.floor(Math.random()*999)+1}`,destStation:LINE[di]};
 }
-function genArea(si,d,h,m,c,z,lineNum=2){
-  const LINE=getLineArr(lineNum);
-  const p=calcProb(LINE[si],null,d,h,m,c,z,lineNum)/100;
+function genArea(si,d,h,m,c,z,lineNum=2,branch=false){
+  const LINE=getLineArr(lineNum,branch);
+  const p=calcProb(LINE[si],null,d,h,m,c,z,lineNum,branch)/100;
   const emptyRate=Math.min(0.7,p*0.9);
   const leavingRate=Math.min(0.3,p*0.4);
   const s=()=>{const r=Math.random();if(r<emptyRate)return{status:"empty",user:null};if(r<emptyRate+leavingRate)return{status:"leaving-soon",user:mkUser(si,d,lineNum)};return{status:"occupied",user:mkUnknown()};};
   return{top:Array.from({length:6},s),bottom:Array.from({length:6},s),standing:Array.from({length:Math.floor(Math.random()*4)+1},()=>mkUser(si,d,lineNum))};
 }
-function genAll(si,d,h,m,lineNum=2){const o={};for(let c=1;c<=10;c++)for(let a=1;a<=3;a++)o[`${c}-${a}`]=genArea(si,d,h,m,c,a,lineNum);return o;}
+function genAll(si,d,h,m,lineNum=2,branch=false){const o={};for(let c=1;c<=10;c++)for(let a=1;a<=3;a++)o[`${c}-${a}`]=genArea(si,d,h,m,c,a,lineNum,branch);return o;}
 
 let _ax=null;
 function sfx(t="click"){
@@ -1113,13 +1119,14 @@ export default function App(){
   const now=new Date(),H=now.getHours(),M=now.getMinutes();
   const LINE=getLineArr(selectedLine,selectedLine===9?line9Express:selectedLine===5?line5Branch:false);
   const LN=getLineN(selectedLine,selectedLine===9?line9Express:selectedLine===5?line5Branch:false);
-  const nxt=curSt?getNextSt(curSt,dir,selectedLine):null;
+  const branch9=selectedLine===9?line9Express:selectedLine===5?line5Branch:false;
+  const nxt=curSt?getNextSt(curSt,dir,selectedLine,branch9):null;
   const tSt=LINE[stIdx];
-  const tNxt=getNextSt(tSt,dir,selectedLine);
+  const tNxt=getNextSt(tSt,dir,selectedLine,branch9);
   const ak=`${car}-${zone}`;
   const ad=areas[ak]||{top:[],bottom:[],standing:[]};
   const ptLv=pts<100?"🌱":pts<300?"⭐":pts<600?"🔥":"👑";
-  const {cur:best,next:bestN}=curSt&&destSt?bestZone(curSt,nxt,dir,H,M,selectedLine):{cur:null,next:null};
+  const {cur:best,next:bestN}=curSt&&destSt?bestZone(curSt,nxt,dir,H,M,selectedLine,branch9):{cur:null,next:null};
   const availEmojis=[...FREE_EMOJIS,...ownedEmj.map(id=>SHOP_EMOJIS.find(e=>e.id===id)?.emoji).filter(Boolean)];
   const allAvts=[...FREE_AVTS,...ownedAvt.map(id=>SHOP_AVATARS.find(a=>a.id===id)?.emoji).filter(Boolean)];
 
@@ -1250,13 +1257,13 @@ export default function App(){
               if(cancelled) return;
               setStIdx(p=>{
                 const curStName=LINE[p];
-                const nextStName=getNextSt(curStName,dir,selectedLine);
+                const nextStName=getNextSt(curStName,dir,selectedLine,branch9);
                 if(!nextStName) return p;
                 const next=LINE.indexOf(nextStName);
                 if(next===-1) return p;
                 const ns=nextStName;
                 if(myDest){
-                  const afterNs=getNextSt(ns,dir,selectedLine);
+                  const afterNs=getNextSt(ns,dir,selectedLine,branch9);
                   if(afterNs===myDest)setAlrt(true);
                   if(ns===myDest){setAreas(prev=>{const u=JSON.parse(JSON.stringify(prev));Object.keys(u).forEach(k=>{["top","bottom"].forEach(r=>{u[k][r].forEach((s,i)=>{if(s.isMe)u[k][r][i]={status:"empty",user:null};});});});return u;});setMySeat(null);setMyDest(null);setAlrt(false);}
                 }
@@ -1285,7 +1292,7 @@ export default function App(){
     sfx("success");
     const i=LINE.indexOf(curSt);
     setStIdx(i>=0?i:0);
-    setAreas(genAll(i>=0?i:0,dir,H,M,selectedLine));
+    setAreas(genAll(i>=0?i:0,dir,H,M,selectedLine,branch9));
     setSelectedTrain(null);
     setTrainPos(null);
     setSub("seats");
@@ -1328,7 +1335,7 @@ export default function App(){
   const sendEmoji=(uid,emoji)=>{sfx("select");setReact(p=>({...p,[uid]:emoji}));setSentEmoji({to:profMod?.name||"유저",emoji});setTimeout(()=>{setReact(p=>{const n={...p};delete n[uid];return n;});setSentEmoji(null);},2500);};
   const sendChat=(uid)=>{if(!chatMsg.trim())return;const t=new Date().toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit"});setChatHist(p=>({...p,[uid]:[...(p[uid]||[]),{from:"me",text:chatMsg,time:t}]}));const rs=["ㅎㅎ!","감사해요 😊","좋은 하루 되세요!","멋진 코디네요!"];setTimeout(()=>{const t2=new Date().toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit"});setChatHist(p=>({...p,[uid]:[...(p[uid]||[]),{from:"them",text:rs[Math.floor(Math.random()*rs.length)],time:t2}]}));},900);setChatMsg("");};
 
-  const curCong=curSt?getCong(curSt,dir,H,M):null;
+  const curCong=curSt?getCong(curSt,dir,H,M,selectedLine,branch9):null;
   const pct=(step/5)*100;
   const PBar=()=><div style={{height:3,background:"#F0F2F5"}}><div style={{width:`${pct}%`,height:"100%",background:"#1A6DFF",transition:"width .4s"}}/></div>;
   const PtBadge=({onClick})=><div onClick={onClick} style={{display:"flex",alignItems:"center",gap:3,background:"#FFFBF0",border:"1px solid #FFE082",borderRadius:20,padding:"4px 10px",flexShrink:0,cursor:onClick?"pointer":"default"}}><span style={{fontSize:11}}>{ptLv}</span><span style={{fontSize:12,fontWeight:700,color:"#FF8F00"}}>{pts}P</span></div>;
@@ -1439,8 +1446,8 @@ export default function App(){
     const lbl=zone<3?`${car}-${zone+1}구역`:car<10?`${car+1}번 칸`:"";
     const rbl=zone>1?`${car}-${zone-1}구역`:car>1?`${car-1}번 칸`:"";
     const cnt=f=>["top","bottom"].reduce((a,r)=>a+(ad[r]?.filter(f).length||0),0);
-    const curP=calcProb(tSt,tNxt,dir,H,M,car,zone,selectedLine);
-    const nxtP=tNxt?calcProb(tNxt,getNextSt(tNxt,dir,selectedLine),dir,H,M,car,zone,selectedLine):null;
+    const curP=calcProb(tSt,tNxt,dir,H,M,car,zone,selectedLine,branch9);
+    const nxtP=tNxt?calcProb(tNxt,getNextSt(tNxt,dir,selectedLine,branch9),dir,H,M,car,zone,selectedLine,branch9):null;
 
     return <div style={{minHeight:"100vh",background:"#F5F6F8",fontFamily:"'Apple SD Gothic Neo','Noto Sans KR',sans-serif",maxWidth:430,margin:"0 auto"}}>
       <style>{`*{box-sizing:border-box;margin:0;padding:0;} button{font-family:inherit;border:none;cursor:pointer;} ::-webkit-scrollbar{display:none;}`}</style>
@@ -1905,9 +1912,9 @@ export default function App(){
               const liveC=realCong[c];
               // 칸의 최고 구역 확률 계산 (zone 1~3 중 최대값)
               const bestP=Math.max(
-                calcProb(curSt,nxt,dir,H,M,c,1,selectedLine),
-                calcProb(curSt,nxt,dir,H,M,c,2,selectedLine),
-                calcProb(curSt,nxt,dir,H,M,c,3,selectedLine)
+                calcProb(curSt,nxt,dir,H,M,c,1,selectedLine,branch9),
+                calcProb(curSt,nxt,dir,H,M,c,2,selectedLine,branch9),
+                calcProb(curSt,nxt,dir,H,M,c,3,selectedLine,branch9)
               );
               const p=liveC!=null?Math.min(95,Math.max(2,Math.round(bestP*(1+(liveC-50)/200)))):bestP;
               const ibCur=best?.car===c,ibNxt=bestN?.car===c,is=car===c;
@@ -1936,8 +1943,8 @@ export default function App(){
           <div style={{display:"flex",alignItems:"stretch",background:"#F8F9FB",borderRadius:10,overflow:"hidden",border:"1px solid #F0F2F5",minHeight:105}}>
             <div style={{width:5,background:"#E5E8EE",flexShrink:0}}/>
             {[1,2,3].map(z=>{
-              const cp=car?calcProb(curSt,nxt,dir,H,M,car,z,selectedLine):0;
-              const np=car&&nxt?calcProb(nxt,getNextSt(nxt,dir,selectedLine),dir,H,M,car,z,selectedLine):null;
+              const cp=car?calcProb(curSt,nxt,dir,H,M,car,z,selectedLine,branch9):0;
+              const np=car&&nxt?calcProb(nxt,getNextSt(nxt,dir,selectedLine,branch9),dir,H,M,car,z,selectedLine,branch9):null;
               const ibCurZ=best?.car===car&&best?.zone===z;
               const ibNxtZ=bestN?.car===car&&bestN?.zone===z;
               const is=zone===z&&!!car;
@@ -1980,8 +1987,8 @@ export default function App(){
     </div>}
 
     {step===4&&car&&zone&&(()=>{
-      const p=calcProb(curSt,nxt,dir,H,M,car,zone,selectedLine);
-      const np=nxt?calcProb(nxt,getNextSt(nxt,dir,selectedLine),dir,H,M,car,zone,selectedLine):null;
+      const p=calcProb(curSt,nxt,dir,H,M,car,zone,selectedLine,branch9);
+      const np=nxt?calcProb(nxt,getNextSt(nxt,dir,selectedLine,branch9),dir,H,M,car,zone,selectedLine,branch9):null;
       return <div className="su">
         <div style={{display:"flex",alignItems:"center",padding:"12px 16px",background:"white",borderBottom:"1px solid #F0F2F5",position:"sticky",top:0,zIndex:10}}>
           <BackBtn onClick={()=>setStep(3)}/>
