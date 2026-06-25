@@ -810,6 +810,21 @@ const QUICK_EXIT_DATA:{[key:string]:{line:number,I:number[],O:number[]}}={
   "모란":{line:8,I:[4],O:[]},
 };
 
+// ── 로컬 영구 저장 (포인트/구매/프로필) ──────────────────
+const LS_KEY="metametro_userdata_v1";
+function loadUserData(){
+  try{
+    const raw=localStorage.getItem(LS_KEY);
+    if(!raw) return null;
+    return JSON.parse(raw);
+  }catch(e){return null;}
+}
+function saveUserData(data){
+  try{
+    localStorage.setItem(LS_KEY,JSON.stringify(data));
+  }catch(e){/* 저장 실패 시 무시 (시크릿모드 등) */}
+}
+
 function toSlot(h,m){return`${String(h).padStart(2,"0")}:${m<30?"00":"30"}`;}
 
 function getCong(st,d,h,m,lineNum=2,branch=false){
@@ -1079,7 +1094,7 @@ export default function App(){
   const [car,setCar]=useState(null);
   const [zone,setZone]=useState(null);
   const [fbDone,setFbDone]=useState(false);
-  const [pts,setPts]=useState(120);
+  const [pts,setPts]=useState(()=>loadUserData()?.pts ?? 120);
   const [areas,setAreas]=useState({});
   const [stIdx,setStIdx]=useState(0);
   const [tStat,setTStat]=useState("stopped");
@@ -1096,7 +1111,7 @@ export default function App(){
   const [chatMod,setChatMod]=useState(null);
   const [chatMsg,setChatMsg]=useState("");
   const [chatHist,setChatHist]=useState({});
-  const [myProf,setMyProf]=useState({avatar:"😎",name:"나"});
+  const [myProf,setMyProf]=useState(()=>loadUserData()?.myProf ?? {avatar:"😎",name:"나"});
   const [editProf,setEditProf]=useState(false);
   const [tmpName,setTmpName]=useState("나");
   const [tmpAv,setTmpAv]=useState("😎");
@@ -1104,8 +1119,8 @@ export default function App(){
   const [toast,setToast]=useState("");
   // 포인트샵
   const [shopTab,setShopTab]=useState("avatar");
-  const [ownedAvt,setOwnedAvt]=useState([]);
-  const [ownedEmj,setOwnedEmj]=useState([]);
+  const [ownedAvt,setOwnedAvt]=useState(()=>loadUserData()?.ownedAvt ?? []);
+  const [ownedEmj,setOwnedEmj]=useState(()=>loadUserData()?.ownedEmj ?? []);
   const [shopConfirm,setShopConfirm]=useState(null);
   const [reported,setReported]=useState({});
   // ── 실시간 API 데이터 ──
@@ -1126,6 +1141,11 @@ export default function App(){
   const ak=`${car}-${zone}`;
   const ad=areas[ak]||{top:[],bottom:[],standing:[]};
   const ptLv=pts<100?"🌱":pts<300?"⭐":pts<600?"🔥":"👑";
+
+  // 포인트/구매/프로필 변경 시 자동 영구 저장
+  useEffect(()=>{
+    saveUserData({pts,ownedAvt,ownedEmj,myProf});
+  },[pts,ownedAvt,ownedEmj,myProf]);
   const {cur:best,next:bestN}=curSt&&destSt?bestZone(curSt,nxt,dir,H,M,selectedLine,branch9):{cur:null,next:null};
   const availEmojis=[...FREE_EMOJIS,...ownedEmj.map(id=>SHOP_EMOJIS.find(e=>e.id===id)?.emoji).filter(Boolean)];
   const allAvts=[...FREE_AVTS,...ownedAvt.map(id=>SHOP_AVATARS.find(a=>a.id===id)?.emoji).filter(Boolean)];
