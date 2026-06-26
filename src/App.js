@@ -937,12 +937,16 @@ const LINE_DIRS={
   2:{I:"내선(시계방향 ↻)",O:"외선(반시계방향 ↺)"},
   3:{I:"상선(대화→오금)",O:"하선(오금→대화)"},
   4:{I:"상선(당고개→남태령)",O:"하선(남태령→당고개)"},
-  5:{I:"상선(방화→마천/하남)",O:"하선(마천/하남→방화)"},
+  5:{I:"상선(방화→마천)",O:"하선(마천→방화)"},
   6:{I:"상선(응암→신내)",O:"하선(신내→응암)"},
   7:{I:"상선(장암→온수)",O:"하선(온수→장암)"},
   8:{I:"상선(별내→모란)",O:"하선(모란→별내)"},
   9:{I:"상선(개화→중앙보훈병원)",O:"하선(중앙보훈병원→개화)"},
 };
+function getDirLabel(lineNum,dir,branch=false){
+  if(lineNum===5&&branch) return dir==="I"?"상선(강동→하남검단산)":"하선(하남검단산→강동)";
+  return LINE_DIRS[lineNum]?.[dir]||(dir==="I"?"상선":"하선");
+}
 const gc=p=>p>=60?"#00C853":p>=35?"#FF8F00":"#F44336";
 const gb=p=>p>=60?"#E8F5E9":p>=35?"#FFF8E1":"#FFEBEE";
 const gcl=c=>c<=40?"여유":c<=65?"보통":c<=100?"혼잡":"매우혼잡";
@@ -1789,7 +1793,7 @@ export default function App(){
         <div style={{fontSize:13,color:"#8B95A1",marginBottom:20}}>현재는 2·3·4·5·7호선을 지원해요</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:9}}>
           {[{n:1,c:"#375AA7",on:true},{n:2,c:"#3DBE2D",on:true},{n:3,c:"#F06B00",on:true},{n:4,c:"#2CAAD6",on:true},{n:5,c:"#8B50A4",on:true},{n:6,c:"#C55C1D",on:true},{n:7,c:"#747F00",on:true},{n:8,c:"#E5609F",on:true},{n:9,c:"#BFA100",on:true}].map(l=>(
-            <button key={l.n} onClick={()=>{sfx(l.on?"select":"click");if(l.on){setSelectedLine(l.n);setCurSt(null);setDestSt(null);setPicking("cur");setStep(2);}else toast_("준비 중이에요!");}} style={{background:l.on?"white":"#F8F9FB",border:`1.5px solid ${l.on?l.c:"#E5E8EE"}`,borderRadius:12,padding:"13px 6px",display:"flex",flexDirection:"column",alignItems:"center",gap:5,opacity:l.on?1:.45,boxShadow:l.on?`0 2px 10px ${l.c}33`:"none",position:"relative"}}>
+            <button key={l.n} onClick={()=>{sfx(l.on?"select":"click");if(l.on){setSelectedLine(l.n);setCurSt(null);setDestSt(null);setPicking("cur");setStep(2);setLine5Branch(false);setLine9Express(false);}else toast_("준비 중이에요!");}} style={{background:l.on?"white":"#F8F9FB",border:`1.5px solid ${l.on?l.c:"#E5E8EE"}`,borderRadius:12,padding:"13px 6px",display:"flex",flexDirection:"column",alignItems:"center",gap:5,opacity:l.on?1:.45,boxShadow:l.on?`0 2px 10px ${l.c}33`:"none",position:"relative"}}>
               <div style={{width:28,height:28,borderRadius:"50%",background:l.c,color:"white",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{l.n}</div>
               <div style={{fontSize:11,fontWeight:600,color:l.on?"#191F28":"#B0B8C1"}}>{l.n}호선</div>
               {!l.on&&<div style={{position:"absolute",top:4,right:4,fontSize:8,color:"#B0B8C1",background:"#F0F2F5",padding:"1px 4px",borderRadius:3}}>준비중</div>}
@@ -1823,7 +1827,15 @@ export default function App(){
           <button onClick={()=>setLine9Express(false)} style={{flex:1,padding:"8px",borderRadius:8,border:`1.5px solid ${!line9Express?"#BFA100":"#E5E8EE"}`,background:!line9Express?"#FFFDE7":"white",fontWeight:700,fontSize:13,color:!line9Express?"#BFA100":"#8B95A1"}}>🚇 일반 (38역)</button>
           <button onClick={()=>setLine9Express(true)} style={{flex:1,padding:"8px",borderRadius:8,border:`1.5px solid ${line9Express?"#BFA100":"#E5E8EE"}`,background:line9Express?"#FFFDE7":"white",fontWeight:700,fontSize:13,color:line9Express?"#BFA100":"#8B95A1"}}>⚡ 급행 (16역)</button>
         </div>}
-        {LINE.filter(s=>selectedLine!==9||!line9Express||EXPRESS9.has(s)).map((s,i)=>{
+        {/* 5호선 본선/하남지선 토글 */}
+        {selectedLine===5&&<div style={{display:"flex",gap:8,padding:"10px 14px",background:"#F8F9FB",borderBottom:"1px solid #F0F2F5"}}>
+          <button onClick={()=>setLine5Branch(false)} style={{flex:1,padding:"8px",borderRadius:8,border:`1.5px solid ${!line5Branch?"#8B50A4":"#E5E8EE"}`,background:!line5Branch?"#F3E5F5":"white",fontWeight:700,fontSize:13,color:!line5Branch?"#8B50A4":"#8B95A1"}}>🚇 본선 (방화↔마천)</button>
+          <button onClick={()=>setLine5Branch(true)} style={{flex:1,padding:"8px",borderRadius:8,border:`1.5px solid ${line5Branch?"#8B50A4":"#E5E8EE"}`,background:line5Branch?"#F3E5F5":"white",fontWeight:700,fontSize:13,color:line5Branch?"#8B50A4":"#8B95A1"}}>🌿 하남선 (강동↔검단산)</button>
+        </div>}
+        {LINE.filter(s=>{
+          if(selectedLine===9&&line9Express) return EXPRESS9.has(s);
+          return true;
+        }).map((s,i)=>{
           const isCur=s===curSt,isDest=s===destSt,dis=picking==="dest"&&s===curSt;
           return <button key={s+i} disabled={dis} onClick={()=>{
             sfx("select");
@@ -1858,7 +1870,7 @@ export default function App(){
               <div style={{fontSize:13,fontWeight:700,color:"#191F28"}}>
                 {curSt}역
                 <span style={{fontSize:11,color:"#8B95A1",fontWeight:400,marginLeft:6}}>
-                  {LINE_DIRS[selectedLine]?.[dir]||(dir==="I"?"상선":"하선")}
+                  {getDirLabel(selectedLine,dir,branch9)}
                 </span>
               </div>
               <div style={{fontSize:11,color:"#1A6DFF",marginTop:2,fontWeight:600}}>다음역 → {nxt||"?"}</div>
@@ -2018,7 +2030,7 @@ export default function App(){
         <PBar/>
         <div style={{padding:"16px 14px 48px"}}>
           <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:12}}>
-            {[`${selectedLine}호선`,`${curSt}→${destSt}`,selectedLine===2?(dir==="I"?"내선":"외선"):(dir==="I"?"상선":"하선"),`${car}칸 ${car}-${zone}구역`,nxt?`다음역: ${nxt}`:""].filter(Boolean).map(c=>(
+            {[`${selectedLine}호선`,`${curSt}→${destSt}`,selectedLine===2?(dir==="I"?"내선":"외선"):getDirLabel(selectedLine,dir,branch9),`${car}칸 ${car}-${zone}구역`,nxt?`다음역: ${nxt}`:""].filter(Boolean).map(c=>(
               <div key={c} style={{background:"white",border:"1px solid #E5E8EE",borderRadius:20,padding:"4px 11px",fontSize:11,color:"#8B95A1"}}>{c}</div>
             ))}
           </div>
