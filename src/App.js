@@ -825,6 +825,29 @@ function saveUserData(data){
   }catch(e){/* 저장 실패 시 무시 (시크릿모드 등) */}
 }
 
+// ── 피드백 히스토리 영구 저장 ──────────────────────────────
+const FB_KEY="metametro_feedback_v1";
+function loadFbHistory(){
+  try{const r=localStorage.getItem(FB_KEY);return r?JSON.parse(r):[];}
+  catch(e){return[];}
+}
+function saveFbHistory(list){
+  try{localStorage.setItem(FB_KEY,JSON.stringify(list.slice(-200)));}
+  catch(e){}
+}
+function calcFbStats(list){
+  if(!list.length) return{total:0,sat:0,rate:null,streak:0};
+  const total=list.length;
+  const sat=list.filter(f=>f.result==="sat").length;
+  const rate=Math.round(sat/total*100);
+  let streak=0;
+  for(let i=list.length-1;i>=0;i--){
+    if(list[i].result==="sat") streak++;
+    else break;
+  }
+  return{total,sat,rate,streak};
+}
+
 function toSlot(h,m){return`${String(h).padStart(2,"0")}:${m<30?"00":"30"}`;}
 
 function getCong(st,d,h,m,lineNum=2,branch=false){
@@ -1098,6 +1121,7 @@ export default function App(){
   const [car,setCar]=useState(null);
   const [zone,setZone]=useState(null);
   const [fbDone,setFbDone]=useState(false);
+  const [fbHistory,setFbHistory]=useState(()=>loadFbHistory());
   const [pts,setPts]=useState(()=>loadUserData()?.pts ?? 120);
   const [areas,setAreas]=useState({});
   const [stIdx,setStIdx]=useState(0);
@@ -1800,10 +1824,43 @@ export default function App(){
             </button>
           ))}
         </div>
+        {/* 내 앉기 통계 카드 */}
+        {(()=>{
+          const stats=calcFbStats(fbHistory);
+          if(stats.total===0) return(
+            <div style={{marginTop:20,padding:"14px 16px",background:"#F8F9FB",borderRadius:14,textAlign:"center"}}>
+              <div style={{fontSize:12,color:"#B0B8C1"}}>첫 탑승 후 피드백을 남기면 내 통계가 쌓여요 📊</div>
+            </div>
+          );
+          return(
+            <div style={{marginTop:20,background:"white",border:"1px solid #F0F2F5",borderRadius:14,padding:"14px 16px",boxShadow:"0 1px 6px rgba(0,0,0,.04)"}}>
+              <div style={{fontSize:12,fontWeight:700,color:"#8B95A1",marginBottom:10}}>📊 내 앉기 통계</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
+                <div style={{textAlign:"center",background:"#EEF4FF",borderRadius:10,padding:"10px 6px"}}>
+                  <div style={{fontSize:20,fontWeight:800,color:"#1A6DFF"}}>{stats.rate}%</div>
+                  <div style={{fontSize:10,color:"#8B95A1",marginTop:2}}>성공률</div>
+                </div>
+                <div style={{textAlign:"center",background:"#F8F9FB",borderRadius:10,padding:"10px 6px"}}>
+                  <div style={{fontSize:20,fontWeight:800,color:"#191F28"}}>{stats.total}</div>
+                  <div style={{fontSize:10,color:"#8B95A1",marginTop:2}}>총 시도</div>
+                </div>
+                <div style={{textAlign:"center",background:"#FFFBF0",borderRadius:10,padding:"10px 6px"}}>
+                  <div style={{fontSize:20,fontWeight:800,color:"#FF8F00"}}>{stats.streak}🔥</div>
+                  <div style={{fontSize:10,color:"#8B95A1",marginTop:2}}>연속 성공</div>
+                </div>
+              </div>
+              <div style={{height:6,background:"#F0F2F5",borderRadius:3,overflow:"hidden"}}>
+                <div style={{height:"100%",width:`${stats.rate}%`,background:stats.rate>=70?"#00C853":stats.rate>=40?"#FF8F00":"#F44336",borderRadius:3}}/>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",marginTop:5}}>
+                <span style={{fontSize:10,color:"#B0B8C1"}}>성공 {stats.sat}번</span>
+                <span style={{fontSize:10,color:"#B0B8C1"}}>실패 {stats.total-stats.sat}번</span>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>}
-
-    {step===2&&<div style={{display:"flex",flexDirection:"column",height:"100vh"}} className="su">
       <div style={{display:"flex",alignItems:"center",padding:"12px 16px",background:"white",borderBottom:"1px solid #F0F2F5",position:"sticky",top:0,zIndex:10}}>
         <BackBtn onClick={()=>setStep(1)}/>
         <div style={{flex:1,fontSize:15,fontWeight:700,color:"#191F28",textAlign:"center"}}>{picking==="cur"?"탑승역 선택":"하차역 선택"}</div>
@@ -2097,28 +2154,57 @@ export default function App(){
               sfx("success");
               addPts(10,"+10P 적립!");
               setFbDone(true);
-              // Firebase에 피드백 저장
-              saveFeedback({
-                station: curSt,
-                direction: dir,
-                car: car,
-                zone: zone,
-                hour: H,
-                result: f.result,
-                congestion: curCong||0,
-              });
+              // 히스토리 저장
+              const entry={result:f.result,station:curSt,line:selectedLine,date:new Date().toISOString()};
+              const newList=[...fbHistory,entry];
+              setFbHistory(newList);
+              saveFbHistory(newList);
+              // Firebase 저장
+              saveFeedback({station:curSt,direction:dir,car,zone,hour:H,result:f.result,congestion:curCong||0});
             }} style={{background:f.bg,border:`1.5px solid ${f.c}33`,borderRadius:16,padding:"22px 12px",display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
               <div style={{fontSize:40}}>{f.e}</div>
               <div style={{fontSize:13,fontWeight:700,color:f.c}}>{f.l}</div>
               <div style={{fontSize:11,color:"#8B95A1"}}>+10P 적립</div>
             </button>
           ))}
-        </div>:<div className="su" style={{marginBottom:16}}>
-          <div style={{fontSize:46,marginBottom:8}}>🎉</div>
-          <div style={{fontSize:16,fontWeight:700,color:"#191F28",marginBottom:4}}>감사해요!</div>
-          <div style={{fontSize:19,fontWeight:800,color:"#FF8F00",marginBottom:4}}>🪙 {pts}P</div>
-          <div style={{fontSize:12,color:"#8B95A1",marginBottom:16}}>피드백이 쌓일수록 더 정확해져요</div>
-        </div>}
+        </div>:(()=>{
+          const stats=calcFbStats(fbHistory);
+          const isSuccess=fbHistory[fbHistory.length-1]?.result==="sat";
+          return <div style={{marginBottom:16}}>
+            <div style={{fontSize:42,marginBottom:6}}>{isSuccess?"🎉":"💪"}</div>
+            <div style={{fontSize:15,fontWeight:700,color:"#191F28",marginBottom:2}}>
+              {isSuccess?"앉으셨군요! 정확했네요 👏":"서 계셨군요, 다음엔 더 잘 맞출게요!"}
+            </div>
+            <div style={{fontSize:12,color:"#8B95A1",marginBottom:16}}>+10P 적립 완료 🪙</div>
+            <div style={{background:"#F8F9FB",borderRadius:14,padding:"16px",marginBottom:12,textAlign:"left"}}>
+              <div style={{fontSize:11,color:"#8B95A1",fontWeight:600,marginBottom:10}}>📊 내 앉기 통계</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
+                <div style={{textAlign:"center",background:"#EEF4FF",borderRadius:10,padding:"10px 6px"}}>
+                  <div style={{fontSize:22,fontWeight:800,color:"#1A6DFF"}}>{stats.rate!==null?`${stats.rate}%`:"–"}</div>
+                  <div style={{fontSize:10,color:"#8B95A1",marginTop:2}}>성공률</div>
+                </div>
+                <div style={{textAlign:"center",background:"white",borderRadius:10,padding:"10px 6px",border:"1px solid #F0F2F5"}}>
+                  <div style={{fontSize:22,fontWeight:800,color:"#191F28"}}>{stats.total}</div>
+                  <div style={{fontSize:10,color:"#8B95A1",marginTop:2}}>총 시도</div>
+                </div>
+                <div style={{textAlign:"center",background:"#FFFBF0",borderRadius:10,padding:"10px 6px"}}>
+                  <div style={{fontSize:22,fontWeight:800,color:"#FF8F00"}}>{stats.streak}🔥</div>
+                  <div style={{fontSize:10,color:"#8B95A1",marginTop:2}}>연속 성공</div>
+                </div>
+              </div>
+              {stats.total>0&&<>
+                <div style={{height:7,background:"#E5E8EE",borderRadius:4,overflow:"hidden",marginBottom:4}}>
+                  <div style={{height:"100%",width:`${stats.rate}%`,background:stats.rate>=70?"#00C853":stats.rate>=40?"#FF8F00":"#F44336",borderRadius:4,transition:"width 0.6s ease"}}/>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between"}}>
+                  <span style={{fontSize:10,color:"#B0B8C1"}}>성공 {stats.sat}번</span>
+                  <span style={{fontSize:10,color:"#B0B8C1"}}>실패 {stats.total-stats.sat}번</span>
+                </div>
+              </>}
+            </div>
+            <div style={{fontSize:11,color:"#B0B8C1"}}>피드백이 쌓일수록 더 정확해져요 ✨</div>
+          </div>;
+        })()}
         {car&&zone&&<div style={{marginBottom:12}}><SocialBtn/></div>}
         <button onClick={()=>{sfx("click");setStep(1);setCurSt(null);setDestSt(null);setCar(null);setZone(null);setFbDone(false);setPicking("cur");setSelectedLine(2);}} style={{width:"100%",padding:"12px",borderRadius:10,border:"1px solid #E5E8EE",background:"white",color:"#8B95A1",fontSize:14,fontWeight:600}}>
           처음으로 돌아가기
