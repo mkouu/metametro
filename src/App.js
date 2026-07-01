@@ -1861,6 +1861,8 @@ export default function App(){
         })()}
       </div>
     </div>}
+
+    {step===2&&<div style={{display:"flex",flexDirection:"column",height:"100vh"}} className="su">
       <div style={{display:"flex",alignItems:"center",padding:"12px 16px",background:"white",borderBottom:"1px solid #F0F2F5",position:"sticky",top:0,zIndex:10}}>
         <BackBtn onClick={()=>setStep(1)}/>
         <div style={{flex:1,fontSize:15,fontWeight:700,color:"#191F28",textAlign:"center"}}>{picking==="cur"?"탑승역 선택":"하차역 선택"}</div>
