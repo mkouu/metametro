@@ -850,6 +850,26 @@ function calcFbStats(list){
 
 function toSlot(h,m){return`${String(h).padStart(2,"0")}:${m<30?"00":"30"}`;}
 
+// ── 요일별 혼잡도 보정 계수 ────────────────────────────────
+// 기준: 평일(월) = 1.0, 실측 데이터가 평일 평균 기반
+function getDayFactor(dow,h){
+  // dow: 0=일, 1=월, 2=화, 3=수, 4=목, 5=금, 6=토
+  if(dow===0) return 0.72; // 일요일: 전반적으로 한산
+  if(dow===6){
+    // 토요일: 출근 시간대 한산, 오후~저녁 여가 혼잡
+    if(h>=7&&h<10) return 0.60;  // 출근 시간 한산
+    if(h>=12&&h<20) return 0.95; // 오후 나들이 혼잡
+    return 0.78;
+  }
+  if(dow===5){
+    // 금요일: 출근 평소, 퇴근(17~20시) 특히 혼잡
+    if(h>=17&&h<20) return 1.20;
+    return 1.05;
+  }
+  if(dow===1) return 1.0;  // 월요일: 기준
+  return 1.05;             // 화~목: 출퇴근 패턴 안정, 살짝 혼잡
+}
+
 function getCong(st,d,h,m,lineNum=2,branch=false){
   const slot=toSlot(h,m);
   const ctMap={1:CT1, 2:CT, 3:CT3, 4:CT4, 5:CT5, 6:CT6, 7:CT7, 8:CT8, 9:CT9};
@@ -869,6 +889,9 @@ function getCong(st,d,h,m,lineNum=2,branch=false){
   } else {
     val=CT["_d"][slot]??CT["_d"]["07:30"]??45;
   }
+  // 요일별 보정
+  const dow=new Date().getDay();
+  val=val*getDayFactor(dow,h);
   // 9호선 급행: 정차역이 절반이라 승객 집중 → 혼잡도 약 1.5배 보정
   if(lineNum===9&&branch&&EXPRESS9.has(st)) val=val*1.5;
   return val;
@@ -2094,7 +2117,14 @@ export default function App(){
             ))}
           </div>
           <div style={{background:`linear-gradient(135deg,${gb(p)},white)`,borderRadius:14,padding:"24px 16px",textAlign:"center",marginBottom:10,boxShadow:"0 1px 8px rgba(0,0,0,.05)"}}>
-            <div style={{fontSize:11,color:"#8B95A1"}}>현재 역 기준</div>
+            <div style={{fontSize:11,color:"#8B95A1"}}>현재 역 기준 {(()=>{
+              const dow=new Date().getDay();
+              const dayNames=["일","월","화","수","목","금","토"];
+              const factor=getDayFactor(dow,H);
+              const tag=factor>=1.15?"혼잡↑":factor>=1.0?"평일기준":factor>=0.85?"여가패턴":"한산↓";
+              const color=factor>=1.15?"#F44336":factor>=1.0?"#8B95A1":factor>=0.85?"#FF8F00":"#00C853";
+              return <span style={{color,fontWeight:600,marginLeft:4}}>{dayNames[dow]}요일 {tag}</span>;
+            })()}</div>
             {/* 베이지안 보정 적용 */}
             {(()=>{
               const finalP=fbCorrection&&fbCorrection.confidence>0
