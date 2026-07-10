@@ -938,8 +938,8 @@ function calcProb(st,nst,d,h,m,car=5,zone=2,lineNum=2,branch=false){
   const C=getCong(st,d,h,m,lineNum,branch);
   const Cn=nst?getCong(nst,d,h,m,lineNum,branch):C;
 
-  // 1. 좌석 점유율 (혼잡도 60% = 좌석 만석 기준)
-  const seatOccupancy=Math.min(1, C/60);
+  // 1. 좌석 점유율 (혼잡도 100% = 정원 만석 기준)
+  const seatOccupancy=Math.min(1, C/100);
   const emptySeatRate=Math.max(0, 1-seatOccupancy);
 
   // 2. 하차로 생기는 빈자리
@@ -950,9 +950,10 @@ function calcProb(st,nst,d,h,m,car=5,zone=2,lineNum=2,branch=false){
 
   const rawAlightRate=Math.max(0, C-Cn)/100;
   const transferBonus=isNextTransfer?0.15:0;
-  const curTransferBonus=isCurTransfer?0.08:0; // 현재역 환승 보너스
-  const minAlight=C<=30?0.20:C<=60?0.10:0.05;
-  const effectiveAlight=Math.max(rawAlightRate+transferBonus, minAlight*(C/100));
+  const curTransferBonus=isCurTransfer?0.08:0;
+  // minAlight: C 낮을수록 하차율 최소 보장 (C/100 이중스케일 제거)
+  const minAlight=C<=30?0.15:C<=60?0.08:0.04;
+  const effectiveAlight=Math.max(rawAlightRate+transferBonus, minAlight);
 
   // 3. 최종 확률
   let P=emptySeatRate*0.8 + Math.min(0.7,effectiveAlight)*(1-emptySeatRate*0.8);
