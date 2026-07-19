@@ -951,8 +951,8 @@ function calcProb(st,nst,d,h,m,car=5,zone=2,lineNum=2,branch=false){
   const rawAlightRate=Math.max(0, C-Cn)/100;
   const transferBonus=isNextTransfer?0.15:0;
   const curTransferBonus=isCurTransfer?0.08:0;
-  // minAlight: C 낮을수록 하차율 최소 보장 (C/100 이중스케일 제거)
-  const minAlight=C<=30?0.15:C<=60?0.08:0.04;
+  // minAlight: 아무리 혼잡해도 매 역마다 최소 하차율 보장
+  const minAlight=C<=30?0.18:C<=60?0.12:0.10;
   const effectiveAlight=Math.max(rawAlightRate+transferBonus, minAlight);
 
   // 3. 최종 확률
