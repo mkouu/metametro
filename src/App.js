@@ -900,6 +900,17 @@ function getCong(st,d,h,m,lineNum=2,branch=false){
 // ── 칸/구역별 확률 계산 (zone 보정 포함) ─────────────────
 // quickExitPenalty: 현재역 빠른하차 칸 = 자리경쟁 심함 → 패널티
 // quickExitBonus: 다음역 빠른하차 칸 = 많이 내릴 예정 → 보너스
+// ── 전 노선 공통 계단 근접 보정 ────────────────────────────
+// 3-4문/7-4문 위치가 계단과 가까워 가장 혼잡 → 멀어질수록 완화
+// DOOR_DATA로 실측 반영된 역(2호선 일부 역)은 중복 방지를 위해 제외
+const STAIR_HOTSPOTS=[12,28]; // (칸-1)*4+도어번호 기준: 3-4문=12, 7-4문=28
+function stairsPenalty(car,zone,st){
+  if(DOOR_DATA[st]) return 0;
+  const pos=(car-1)*4+(zone+0.5);
+  const distCars=Math.min(...STAIR_HOTSPOTS.map(h=>Math.abs(pos-h)))/4;
+  return 0.10*Math.exp(-0.6*distCars);
+}
+
 function calcZoneBonus(st,car,zone,nst?,d?){
   const doors=DOOR_DATA[st]||[];
   let bonus=0;
@@ -931,7 +942,7 @@ function calcZoneBonus(st,car,zone,nst?,d?){
       }
     }
   }
-  return{bonus:Math.min(bonus+quickBonus,0.20),penalty:carPenalty+quickPenalty};
+  return{bonus:Math.min(bonus+quickBonus,0.20),penalty:carPenalty+quickPenalty+stairsPenalty(car,zone,st)};
 }
 
 function calcProb(st,nst,d,h,m,car=5,zone=2,lineNum=2,branch=false){
