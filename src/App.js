@@ -810,7 +810,7 @@ const QUICK_EXIT_DATA:{[key:string]:{line:number,I:number[],O:number[]}}={
   "모란":{line:8,I:[4],O:[]},
 };
 
-// ── 로컬 영구 저장 (포인트/구매/프로필) ──────────────────
+// ── 로컬 영구 저장 (포인트/구매/프로필/루틴) ──────────────
 const LS_KEY="metametro_userdata_v1";
 function loadUserData(){
   try{
@@ -1184,6 +1184,7 @@ export default function App(){
   const [shopTab,setShopTab]=useState("avatar");
   const [ownedAvt,setOwnedAvt]=useState(()=>loadUserData()?.ownedAvt ?? []);
   const [ownedEmj,setOwnedEmj]=useState(()=>loadUserData()?.ownedEmj ?? []);
+  const [routines,setRoutines]=useState(()=>loadUserData()?.routines ?? []); // [{id,label,line,branch9,curSt,destSt,dir}]
   const [shopConfirm,setShopConfirm]=useState(null);
   const [reported,setReported]=useState({});
   // ── 실시간 API 데이터 ──
@@ -1205,11 +1206,35 @@ export default function App(){
   const ad=areas[ak]||{top:[],bottom:[],standing:[]};
   const ptLv=pts<100?"🌱":pts<300?"⭐":pts<600?"🔥":"👑";
 
-  // 포인트/구매/프로필 변경 시 자동 영구 저장
+  // 포인트/구매/프로필/루틴 변경 시 자동 영구 저장
   useEffect(()=>{
-    saveUserData({pts,ownedAvt,ownedEmj,myProf});
-  },[pts,ownedAvt,ownedEmj,myProf]);
+    saveUserData({pts,ownedAvt,ownedEmj,myProf,routines});
+  },[pts,ownedAvt,ownedEmj,myProf,routines]);
   const {cur:best,next:bestN}=curSt&&destSt?bestZone(curSt,nxt,dir,H,M,selectedLine,branch9):{cur:null,next:null};
+
+  // ── 출퇴근 루틴 ──────────────────────────────────────────
+  const routineKey=(line,cSt,dSt,d,br)=>`${line}|${br}|${cSt}|${dSt}|${d}`;
+  const curRoutineKey=curSt&&destSt?routineKey(selectedLine,curSt,destSt,dir,branch9):null;
+  const isCurRoutineSaved=curRoutineKey&&routines.some(r=>routineKey(r.line,r.curSt,r.destSt,r.dir,r.branch9)===curRoutineKey);
+  const saveCurRoutine=()=>{
+    if(!curSt||!destSt||isCurRoutineSaved) return;
+    if(routines.length>=3){toast_("루틴은 최대 3개까지 저장할 수 있어요");return;}
+    const H2=new Date().getHours();
+    const label=H2<15?"출근길":"퇴근길";
+    setRoutines(r=>[...r,{id:Date.now(),label,line:selectedLine,branch9,curSt,destSt,dir}]);
+    sfx("success");toast_("루틴으로 저장했어요 ⭐");
+  };
+  const deleteRoutine=id=>{setRoutines(r=>r.filter(x=>x.id!==id));};
+  const applyRoutine=r=>{
+    sfx("select");
+    setSelectedLine(r.line);
+    if(r.line===9) setLine9Express(!!r.branch9); else if(r.line===5) setLine5Branch(!!r.branch9);
+    setCurSt(r.curSt);setDestSt(r.destSt);setDir(r.dir);
+    const LN2=getLineArr(r.line,r.branch9);
+    setStIdx(LN2.indexOf(r.curSt));
+    setPicking("done");setCar(null);setZone(null);setFbDone(false);
+    setStep(3);
+  };
   const availEmojis=[...FREE_EMOJIS,...ownedEmj.map(id=>SHOP_EMOJIS.find(e=>e.id===id)?.emoji).filter(Boolean)];
   const allAvts=[...FREE_AVTS,...ownedAvt.map(id=>SHOP_AVATARS.find(a=>a.id===id)?.emoji).filter(Boolean)];
 
@@ -1848,6 +1873,29 @@ export default function App(){
       </div>
       <PBar/>
       <div style={{padding:"22px 18px"}}>
+        {/* 출퇴근 루틴 */}
+        <div style={{marginBottom:20}}>
+          <div style={{fontSize:12,fontWeight:700,color:"#8B95A1",marginBottom:8}}>⭐ 내 루틴</div>
+          {routines.length===0?
+            <div style={{padding:"12px 14px",background:"#F8F9FB",borderRadius:12,fontSize:12,color:"#B0B8C1"}}>
+              자주 타는 노선을 등록하면 여기서 바로 확인할 수 있어요. 칸/구역 선택 화면 상단의 ☆를 눌러보세요.
+            </div>
+            :
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {routines.map(r=>(
+                <div key={r.id} style={{display:"flex",alignItems:"center",gap:10,background:"white",border:"1px solid #F0F2F5",borderRadius:12,padding:"11px 12px",boxShadow:"0 1px 6px rgba(0,0,0,.04)"}}>
+                  <div style={{width:30,height:30,borderRadius:"50%",background:"#1A6DFF",color:"white",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{r.line}</div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:11,color:"#8B95A1",fontWeight:600}}>{r.label}</div>
+                    <div style={{fontSize:13,fontWeight:700,color:"#191F28",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.curSt} → {r.destSt}</div>
+                  </div>
+                  <button onClick={()=>applyRoutine(r)} style={{background:"#EEF4FF",color:"#1A6DFF",border:"none",borderRadius:8,padding:"7px 12px",fontSize:12,fontWeight:700,cursor:"pointer",flexShrink:0}}>바로 확인</button>
+                  <button onClick={()=>deleteRoutine(r.id)} style={{background:"none",border:"none",color:"#C5CAD5",fontSize:14,padding:"0 2px",cursor:"pointer",flexShrink:0}}>✕</button>
+                </div>
+              ))}
+            </div>
+          }
+        </div>
         <div style={{fontSize:20,fontWeight:800,marginBottom:3}}>어느 호선을 타세요?</div>
         <div style={{fontSize:13,color:"#8B95A1",marginBottom:20}}>현재는 2·3·4·5·7호선을 지원해요</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:9}}>
@@ -1953,6 +2001,9 @@ export default function App(){
       <div style={{display:"flex",alignItems:"center",padding:"12px 16px",background:"white",borderBottom:"1px solid #F0F2F5",position:"sticky",top:0,zIndex:10}}>
         <BackBtn onClick={()=>{setStep(2);setPicking("dest");}}/>
         <div style={{flex:1,fontSize:15,fontWeight:700,color:"#191F28",textAlign:"center"}}>칸과 구역 선택</div>
+        <button onClick={saveCurRoutine} disabled={isCurRoutineSaved} style={{background:"none",border:"none",fontSize:19,marginRight:6,cursor:isCurRoutineSaved?"default":"pointer",opacity:isCurRoutineSaved?0.4:1}} title={isCurRoutineSaved?"이미 루틴에 저장됨":"이 경로를 루틴으로 저장"}>
+          {isCurRoutineSaved?"⭐":"☆"}
+        </button>
         <PtBadge onClick={()=>setSub("shop")}/>
       </div>
       <PBar/>
