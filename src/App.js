@@ -74,7 +74,7 @@ const N3=LINE3.length;
 // 당고개~불암산: 경기 구간 (혼잡도 기본값)
 // 불암산~남태령: 서울 구간 (실측 데이터)
 // 남태령~오이도: 안산/과천선 (코레일, 기본값)
-const LINE4=["당고개","상계주공19","마들","노원","창동","쌍문","수유","미아","미아사거리","길음","성신여대입구","한성대입구","혜화","동대문","동대문역사문화공원","충무로","명동","회현","서울역","숙대입구","삼각지","신용산","이촌","동작","총신대입구","사당","남태령"];
+const LINE4=["불암산","상계","노원","창동","쌍문","수유","미아","미아사거리","길음","성신여대입구","한성대입구","혜화","동대문","동대문역사문화공원","충무로","명동","회현","서울역","숙대입구","삼각지","신용산","이촌","동작","총신대입구","사당","남태령"];
 const N4=LINE4.length;
 
 // ── 7호선 노선 (상선=장암→온수 방향) ────────────────────────
@@ -99,7 +99,7 @@ const LINE6=["응암","역촌","불광","독바위","연신내","구산","새절
 const N6=LINE6.length;
 
 // ── 8호선 노선 (상선=별내→모란 방향) ──────────────────────────
-const LINE8=["별내","다산","구리","토평","암사","천호","강동구청","몽촌토성","잠실","석촌","송파","가락시장","문정","장지","복정","산성","남한산성입구","단대오거리","신흥","수진","모란"];
+const LINE8=["별내","다산","구리","토평","암사역사공원","암사","천호","강동구청","몽촌토성","잠실","석촌","송파","가락시장","문정","장지","복정","산성","남한산성입구","단대오거리","신흥","수진","모란","남위례"];
 const N8=LINE8.length;
 
 // ── 9호선 노선 ───────────────────────────────────────────────
@@ -158,9 +158,9 @@ function getLineN(lineNum,branch=false){
 // 방향 계산 (노선 공통)
 // 2호선: 순환선 → 내선/외선
 // 3호선: 직선 → 상선(I)/하선(O)
-function calcDir(from, to, lineNum=2){
-  const LINE=getLineArr(lineNum);
-  const LN=getLineN(lineNum);
+function calcDir(from, to, lineNum=2, branch=false){
+  const LINE=getLineArr(lineNum, branch);
+  const LN=getLineN(lineNum, branch);
   const fi=LINE.indexOf(from), ti=LINE.indexOf(to);
   if(fi===-1||ti===-1) return "I";
   if(lineNum===2){
@@ -1991,7 +1991,7 @@ export default function App(){
           return <button key={s+i} disabled={dis} onClick={()=>{
             sfx("select");
             if(picking==="cur"){setCurSt(s);setPicking("dest");}
-            else{if(s===curSt){toast_("출발역과 다른 역 선택해주세요");return;}const d=calcDir(curSt,s,selectedLine);setDestSt(s);setDir(d);setStIdx(LINE.indexOf(curSt));setPicking("done");setStep(3);}
+            else{if(s===curSt){toast_("출발역과 다른 역 선택해주세요");return;}const d=calcDir(curSt,s,selectedLine,branch9);setDestSt(s);setDir(d);setStIdx(LINE.indexOf(curSt));setPicking("done");setStep(3);}
           }} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",width:"100%",background:isCur||isDest?"#EEF4FF":"white",borderBottom:"1px solid #F5F6F8",opacity:dis?.35:1,cursor:dis?"not-allowed":"pointer"}}>
             <div style={{display:"flex",alignItems:"center",gap:9}}>
               <div style={{width:7,height:7,borderRadius:"50%",background:isCur||isDest?"#1A6DFF":"#E5E8EE"}}/>
@@ -2184,11 +2184,14 @@ export default function App(){
         <PBar/>
         <div style={{padding:"16px 14px 48px"}}>
           <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:12}}>
-            {[`${selectedLine}호선`,`${curSt}→${destSt}`,selectedLine===2?(dir==="I"?"내선":"외선"):getDirLabel(selectedLine,dir,branch9),`${car}칸 ${car}-${zone}구역`,nxt?`다음역: ${nxt}`:""].filter(Boolean).map(c=>(
+            {[`${selectedLine}호선`,`${curSt}→${destSt}`,selectedLine===2?(dir==="I"?"내선":"외선"):getDirLabel(selectedLine,dir,branch9),nxt?`다음역: ${nxt}`:""].filter(Boolean).map(c=>(
               <div key={c} style={{background:"white",border:"1px solid #E5E8EE",borderRadius:20,padding:"4px 11px",fontSize:11,color:"#8B95A1"}}>{c}</div>
             ))}
           </div>
           <div style={{background:`linear-gradient(135deg,${gb(p)},white)`,borderRadius:14,padding:"24px 16px",textAlign:"center",marginBottom:10,boxShadow:"0 1px 8px rgba(0,0,0,.05)"}}>
+            <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"#191F28",color:"white",borderRadius:12,padding:"7px 16px",fontSize:19,fontWeight:800,marginBottom:10}}>
+              🚃 {car}칸 · {car}-{zone}구역
+            </div>
             <div style={{fontSize:11,color:"#8B95A1"}}>현재 역 기준 {(()=>{
               const dow=new Date().getDay();
               const dayNames=["일","월","화","수","목","금","토"];
